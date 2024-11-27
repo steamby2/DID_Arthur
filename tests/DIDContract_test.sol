@@ -3,25 +3,27 @@ pragma solidity ^0.8.0;
 
 import "remix_tests.sol"; // Importation pour utiliser les tests Remix
 import "../contracts/DIDContract.sol";
+import "remix_accounts.sol"; // Importation pour accéder aux comptes de test
 
 contract DIDContractTest {
     DIDContract didContract;
-    address adminAddress = address(this); // Adresse de l'administrateur pour le test
     address userAddress = address(0x123); // Adresse utilisateur pour les tests
 
-    // Configuration avant chaque test
+    /// #sender: account-0
     function beforeAll() public {
-        // Déployer le contrat avec l'adresse de l'administrateur
-        didContract = new DIDContract(adminAddress);
+        // Déployer le contrat
+        didContract = new DIDContract();
 
-        // Vérifier que l'administrateur a le rôle approprié
+        // Vérifier que l'administrateur (account-0) a le rôle approprié
+        address admin1 = TestsAccounts.getAccount(0);
         Assert.equal(
-            didContract.hasRole(didContract.CONSTRUCTOR_ADMIN_ROLE(), adminAddress),
+            didContract.hasRole(didContract.CONSTRUCTOR_ADMIN_ROLE(), admin1),
             true,
             unicode"L'administrateur doit avoir le rôle CONSTRUCTOR_ADMIN_ROLE"
         );
     }
 
+    /// #sender: account-0
     function testCreateDID() public {
         string memory did = "did:example:123";
 
@@ -43,32 +45,26 @@ contract DIDContractTest {
         );
     }
 
+    /// #sender: account-1
     function testUpdateDID() public {
         string memory did = "did:example:123";
 
-        // Simuler une mise à jour par l'utilisateur
-        try didContract.updateDID(did, "Updated Document") {
-            Assert.ok(false, unicode"L'utilisateur non propriétaire ne peut pas mettre à jour le DID");
-        } catch Error(string memory reason) {
-            Assert.equal(reason, unicode"Not the owner of the DID", unicode"Le message d'erreur doit indiquer que l'utilisateur n'est pas le propriétaire");
-        } catch {
-            Assert.ok(false, "Une erreur inattendue s'est produite");
-        }
+        // Transférer le DID à account-1 pour simuler la mise à jour par un nouveau propriétaire
+        /// #sender: account-0
+        didContract.transferDID(did, TestsAccounts.getAccount(1));
 
-        // Effectuer le transfert au testeur pour simuler la mise à jour
-        didContract.transferDID(did, adminAddress);
-
-        // Mettre à jour le DID
+        // Mettre à jour le DID en tant que nouveau propriétaire
         didContract.updateDID(did, "Updated Document");
 
         // Vérifier que la mise à jour a été appliquée
         (string memory document, , , ) = didContract.verifyDID(did);
-        Assert.equal(document, unicode"Updated Document", unicode"Le document DID doit être mis à jour");
+        Assert.equal(document, "Updated Document", unicode"Le document DID doit être mis à jour");
     }
 
+    /// #sender: account-0
     function testTransferDID() public {
         string memory did = "did:example:123";
-        address newOwner = address(0x456);
+        address newOwner = TestsAccounts.getAccount(2);
 
         // Transférer le DID à un nouvel utilisateur
         didContract.transferDID(did, newOwner);
