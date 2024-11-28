@@ -15,7 +15,8 @@ contract DIDContract is AccessControl {
         address owner;
     }
 
-    mapping(string => DID) private dids;
+    mapping(string => DID) private dids; // Mapping des DIDs
+    mapping(address => string) private userDIDs; // Mapping des adresses utilisateur vers leurs DIDs
 
     event DIDCreated(string did, address owner);
     event DIDUpdated(string did, string newDidDocument);
@@ -42,10 +43,12 @@ contract DIDContract is AccessControl {
         address userAddress // Nouvelle adresse propriétaire
     ) public onlyRole(CONSTRUCTOR_ADMIN_ROLE) {
         require(dids[_did].owner == address(0), "DID already exists");
-        
+        require(bytes(userDIDs[userAddress]).length == 0, "User already has a DID.");
+
         // Associer le DID à l'utilisateur spécifié
         dids[_did] = DID(_didDocument, _name, _email, userAddress);
-        
+        userDIDs[userAddress] = _did; // Lier l'utilisateur à ce DID
+
         // Attribuer le rôle d'utilisateur à l'adresse
         _grantRole(USER_ROLE, userAddress);
 
@@ -70,6 +73,14 @@ contract DIDContract is AccessControl {
         return (didData.didDocument, didData.name, didData.email, didData.owner);
     }
 
+    function getMyDID() public view returns (string memory, string memory, string memory, address) {
+        string memory userDid = userDIDs[msg.sender];
+        require(bytes(userDid).length > 0, "You do not have a DID assigned.");
+
+        DID memory didData = dids[userDid];
+        return (didData.didDocument, didData.name, didData.email, didData.owner);
+    }
+
     function addVerifier(address verifier) public onlyRole(CONSTRUCTOR_ADMIN_ROLE) {
         grantRole(VERIFIER_ROLE, verifier);
     }
@@ -82,6 +93,10 @@ contract DIDContract is AccessControl {
     function transferDID(string memory _did, address newOwner) public onlyRole(CONSTRUCTOR_ADMIN_ROLE) {
         require(dids[_did].owner != address(0), "DID does not exist");
         require(newOwner != address(0), "New owner address is invalid");
+        require(bytes(userDIDs[newOwner]).length == 0, "New owner already has a DID.");
+
+        userDIDs[dids[_did].owner] = "";
         dids[_did].owner = newOwner;
+        userDIDs[newOwner] = _did;
     }
 }
